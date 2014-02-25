@@ -4,6 +4,7 @@ class Ship extends Ship_Base
 {
 	protected $possibleMoves;
 	protected $knownWormholes;
+	protected $destination;
 
 	/**
 	 * @param $a array
@@ -61,6 +62,8 @@ class Ship extends Ship_Base
 
 	public function navigateTo($x, $y, $z)
 	{
+		if (!$this->destination) $this->destination = array('x'=>$x, 'y'=>$y, 'z'=>$z);
+
 		do {
 			$nextMove = $this->getMove($x, $y, $z);
 
@@ -84,7 +87,7 @@ class Ship extends Ship_Base
 
 //			echo "we're at: " . $this->getX() . ", " . $this->getY() . ", " . $this->getZ() ."\n";
 
-			if (!$this->knownWormholes && $scan['wormholes']) {
+			if (empty($this->knownWormholes) && $scan['wormholes']) {
 				$this->knownWormholes = array();
 				for ($i=0; $i<count($scan['wormholes']); ++$i) {
 					$this->knownWormholes[$i] = $scan['wormholes'][$i];
@@ -100,9 +103,19 @@ class Ship extends Ship_Base
 			if ($this->knownWormholes) {
 				$currentDistance = $this->calculateDistance(array('x' => $x, 'y' => $y, 'z' => $z));
 
-				if ($currentDistance < $this->knownWormholes[0]['distance']) {
+				if ($currentDistance > $this->knownWormholes[0]['distance']) {
 					// wormhole is nearer than our current position, lets go to it
 					$this->goDownWormhole($this->knownWormholes[0]);
+					$this->knownWormholes[0]['x2'] = $this->getX();
+					$this->knownWormholes[0]['y2'] = $this->getY();
+					$this->knownWormholes[0]['z2'] = $this->getZ();
+					$this->knownWormholes[0]['distance2'] = $this->calculateDistance(array('x'=>$x, 'y'=>$y, 'z'=>$z));
+					if ($this->knownWormholes[0]['distance2'] > $this->knownWormholes[0]['distance']) {
+						$this->goBackThroughWormhole($this->knownWormholes[0]);
+					}
+					// remove this wormhole from knownWormholes
+					array_shift($this->knownWormholes);
+					uasort($this->knownWormholes, array($this, 'sortDistance'));
 				}
 			}
 			$this->move($nextMove['x'], $nextMove['y'], $nextMove['z']);
@@ -120,46 +133,70 @@ class Ship extends Ship_Base
 
 	public function goDownWormhole($wormhole)
 	{
-		echo "going down wormhole: $wormhole[x], $wormhole[y], $wormhole[z]\n";
-		print $this->getX();
-		print $this->getY();
-		print $this->getZ();
-		print_r($wormhole);
-		while (!($this->getX() == $wormhole['x'] &&
-			$this->getY() == $wormhole['y'] &&
-			$this->getZ() == $wormhole['z'])
-		) {
-			$move = $this->getMove($wormhole['x'], $wormhole['y'], $wormhole['z']);
-			print_r($move);
-			$this->move($move['x'], $move['y'], $move['z']);
-		}
-		die();
-		$notAtWormhole = true;
+//		echo "going down wormhole: $wormhole[x], $wormhole[y], $wormhole[z]\n";
 		do {
-			$move = $this->getMove($wormhole['x'], $wormhole['y'], $wormhole['z']);
 			$scan = $this->scan();
 
+			$nextMove = $this->getMove($wormhole['x'], $wormhole['y'], $wormhole['z']);
 			if ($nearbyAsteroids = $scan['asteroids']) {
-				echo count($nearbyAsteroids) . " nearby asteroids\n";
-				if ($this->collides($move, $nearbyAsteroids)) {
-					// don't let the collision be 0,0,0 !
+//				echo count($nearbyAsteroids) . " asteroids nearby\n";
+
+				if ($this->collides($nextMove, $nearbyAsteroids)) {
+					// find a quick alternative that doesn't collide, if any are available
 					for ($i = 0; $i < 27; ++$i) {
 						if (!$this->collides($this->possibleMoves[$i], $nearbyAsteroids)) {
-							$move['x'] = $this->possibleMoves[$i][0];
-							$move['y'] = $this->possibleMoves[$i][1];
-							$move['z'] = $this->possibleMoves[$i][2];
+							$nextMove['x'] = $this->possibleMoves[$i][0];
+							$nextMove['y'] = $this->possibleMoves[$i][1];
+							$nextMove['z'] = $this->possibleMoves[$i][2];
 							break;
 						}
 					}
 				}
 			}
 
-			$this->move($move['x'], $move['y'], $move['z']);
-		} while ($notAtWormhole);
-//		echo "we should now be at the wormhole: $wormhole[x], $wormhole[y], $wormhole[z]\n";
-//		echo "we are at: "	.$this->getX() . ", " . $this->getY() . ", " . $this->getZ() . "\n";
-		die();
+			$nextPosition = array(
+				'x' => $this->getX() + $nextMove['x'],
+				'y' => $this->getY() + $nextMove['y'],
+				'z' => $this->getZ() + $nextMove['z'],
+			);
+			$this->move($nextMove['x'], $nextMove['y'], $nextMove['z']);
+		} while (!($nextPosition['x'] == $wormhole['x'] &&
+				   $nextPosition['y'] == $wormhole['y'] &&
+				   $nextPosition['z'] == $wormhole['z']));
+	}
 
+	public function goBackThroughWormhole($wormhole)
+	{
+		echo "going back through wormhole: $wormhole[x2], $wormhole[y2], $wormhole[z2]\n";
+		do {
+			$scan = $this->scan();
+
+			$nextMove = $this->getMove($wormhole['x2'], $wormhole['y2'], $wormhole['z2']);
+			if ($nearbyAsteroids = $scan['asteroids']) {
+//				echo count($nearbyAsteroids) . " asteroids nearby\n";
+
+				if ($this->collides($nextMove, $nearbyAsteroids)) {
+					// find a quick alternative that doesn't collide, if any are available
+					for ($i = 0; $i < 27; ++$i) {
+						if (!$this->collides($this->possibleMoves[$i], $nearbyAsteroids)) {
+							$nextMove['x'] = $this->possibleMoves[$i][0];
+							$nextMove['y'] = $this->possibleMoves[$i][1];
+							$nextMove['z'] = $this->possibleMoves[$i][2];
+							break;
+						}
+					}
+				}
+			}
+
+			$nextPosition = array(
+				'x' => $this->getX() + $nextMove['x'],
+				'y' => $this->getY() + $nextMove['y'],
+				'z' => $this->getZ() + $nextMove['z'],
+			);
+			$this->move($nextMove['x'], $nextMove['y'], $nextMove['z']);
+		} while (!($nextPosition['x'] == $wormhole['x2'] &&
+			$nextPosition['y'] == $wormhole['y2'] &&
+			$nextPosition['z'] == $wormhole['z2']));
 	}
 
 	public function getMove($x, $y, $z)

@@ -16,9 +16,9 @@
 final class Universe
 {
     // Things to change to make debugging easier...
-    private $universeRadius = 100; //10000; // make this smaller and you'll likely get a much faster run-time.
-    private $asteroidDensity = 100; //350; // NB: It's the reciporal, i.e., one asteroid per 350 3d grid cells.
-    private $wormholeSpawnLimit = 1; //50; // the number of wormholes that will spawn in the universe
+    private $universeRadius = 1000; //10000; // make this smaller and you'll likely get a much faster run-time.
+    private $asteroidDensity = 350; //350; // NB: It's the reciporal, i.e., one asteroid per 350 3d grid cells.
+    private $wormholeSpawnLimit = 50; //50; // the number of wormholes that will spawn in the universe
 
     // change stuff below here and you'll probably break something.
     private $spaceShip = null;
